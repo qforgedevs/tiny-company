@@ -112,3 +112,49 @@ class AuditEvent(Base):
     outcome: Mapped[str] = mapped_column(String(50), nullable=False)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class AgentTask(Base):
+    __tablename__ = 'agent_tasks'
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True, index=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey('organizations.id'), nullable=False)
+    task_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default='pending', nullable=False)
+    context: Mapped[str] = mapped_column(Text, nullable=False)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, onupdate=lambda: datetime.now(timezone.utc))
+
+    organization: Mapped[Organization] = relationship()
+
+
+class ModelCall(Base):
+    __tablename__ = 'model_calls'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    agent_task_id: Mapped[str] = mapped_column(ForeignKey('agent_tasks.id'), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    prompt_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    response: Mapped[str] = mapped_column(Text, nullable=False)
+    stop_reason: Mapped[str] = mapped_column(String(50), nullable=False)
+    cost_usd: Mapped[Float] = mapped_column(Float, default=0.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    agent_task: Mapped[AgentTask] = relationship()
+
+
+class ToolCall(Base):
+    __tablename__ = 'tool_calls'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    agent_task_id: Mapped[str] = mapped_column(ForeignKey('agent_tasks.id'), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    args: Mapped[str] = mapped_column(Text, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    agent_task: Mapped[AgentTask] = relationship()

@@ -85,3 +85,35 @@ class AuditEventRead(BaseModel):
     outcome: str
     details: str | None = None
     created_at: datetime
+
+
+class ModelCallRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    agent_task_id: str
+    provider: str
+    prompt_length: int
+    response: str
+    stop_reason: str
+    cost_usd: float
+    created_at: datetime
+
+
+class AgentTaskRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    organization_id: int
+    task_type: str
+    status: str
+    context: str | None = None
+    result: str | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentTaskCreate(BaseModel):
+    task_type: str
+    context: dict[str, object]

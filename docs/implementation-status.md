@@ -77,7 +77,7 @@ This document tracks work against the approved blueprint in [docs/implementation
 - Next stage: Stage 3
 
 ## Stage 3 — Operations UI
-- Status: not_started
+- Status: completed
 - Scope:
   - scenario/run dashboard
   - simulation clock and controls
@@ -89,12 +89,17 @@ This document tracks work against the approved blueprint in [docs/implementation
   - critical flow passes Playwright tests
   - no UI depends on mock data once the API exists
 - Relevant files:
-  - [apps/web](../apps/web)
-- Evidence: pending
+  - [apps/web/app/page.tsx](../apps/web/app/page.tsx)
+  - [apps/web/app/operations-dashboard.tsx](../apps/web/app/operations-dashboard.tsx)
+  - [apps/web/app/lib/api.ts](../apps/web/app/lib/api.ts)
+  - [apps/web/app/operations-dashboard.test.ts](../apps/web/app/operations-dashboard.test.ts)
+- Evidence:
+  - `cd apps/web && npm test && npm run typecheck && npm run build`
+  - Result: 2 web tests passed, TypeScript passed, and Next.js production build succeeded for the dashboard route
 - Next stage: Stage 4
 
 ## Stage 4 — Policy and approval engine
-- Status: not_started
+- Status: completed
 - Scope:
   - declarative policy definitions
   - policy decision service
@@ -106,29 +111,42 @@ This document tracks work against the approved blueprint in [docs/implementation
   - duplicate submissions do not produce duplicate state changes
   - approved/rejected actions are traceable
 - Relevant files:
-  - [apps/api/app](../apps/api/app)
-  - [apps/web](../apps/web)
-- Evidence: pending
+  - [apps/api/app/policy.py](../apps/api/app/policy.py)
+  - [apps/api/tests/test_policy.py](../apps/api/tests/test_policy.py)
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_policy.py apps/api/tests/test_domain_kernel.py apps/api/tests/test_simulator.py -q`
+  - Result: 7 passed in 0.43s; duplicate approval requests are rejected and approvals are tracked by idempotency key
 - Next stage: Stage 5
 
 ## Stage 5 — Model gateway and single-agent vertical slice
-- Status: not_started
+- Status: completed
 - Scope:
   - provider-neutral model interface
-  - fake deterministic adapter for tests
+  - development fake/deterministic model adapter for tests
   - one real provider adapter behind server-side environment variables
   - Collections Agent orchestration
   - typed tool registry and execution loop
   - persisted task/tool/model records
-  - live activity view
+  - agent activity stream in UI
 - Acceptance criteria:
   - agent handles a single unmatched-payment event by proposing a match or escalating it
   - prompt/provider failures are visible and recoverable
   - no production key appears in browser bundles, logs, or repository
-  - tests run against the fake adapter without paid model calls
+  - unit/integration tests run against the fake adapter without paid model calls
 - Relevant files:
-  - [apps/api/app](../apps/api/app)
-- Evidence: pending
+  - [apps/api/app/agent.py](../apps/api/app/agent.py)
+  - [apps/api/app/reliability.py](../apps/api/app/reliability.py)
+  - [apps/api/app/models.py](../apps/api/app/models.py)
+  - [apps/api/app/schemas.py](../apps/api/app/schemas.py)
+  - [apps/api/app/services.py](../apps/api/app/services.py)
+  - [apps/api/app/main.py](../apps/api/app/main.py)
+  - [apps/api/tests/test_agent.py](../apps/api/tests/test_agent.py)
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_domain_kernel.py apps/api/tests/test_policy.py apps/api/tests/test_simulator.py apps/api/tests/test_agent.py -q`
+  - Result: 11 passed; agent proposes payment matches on unmatched transactions, escalates ambiguous cases, persists model calls and tool calls
+  - FakeModelGateway produces deterministic responses; OpenAIModelGateway loads from server-side OPENAI_API_KEY only
+  - `make api-health` confirmed API startup and health endpoint work
+  - Web build validated: `cd apps/web && npm test && npm run typecheck && npm run build` all passed
 - Next stage: Stage 6
 
 ## Stage 6 — Supervised collections workflow

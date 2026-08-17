@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Iterable
+import json
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AuditEvent, BankTransaction, CaseRecord, Charge, Customer, CustomerMessage, Organization, PaymentReceipt
+from app.models import AuditEvent, AgentTask, BankTransaction, CaseRecord, Charge, Customer, CustomerMessage, ModelCall, Organization, PaymentReceipt, ToolCall
 
 
 class DomainService:
@@ -96,3 +97,60 @@ class DomainService:
         self.create_audit_event(org.id, 'system', 'seed_fixture_created', 'success', entity_type='organization', entity_id=org.id, details='Initial domain fixture created.')
         self.db.commit()
         return org
+
+    def create_agent_task(self, organization_id: int, task_id: str, task_type: str, context: dict[str, object]) -> AgentTask:
+        task = AgentTask(
+            id=task_id,
+            organization_id=organization_id,
+            task_type=task_type,
+            context=json.dumps(context),
+            status='pending',
+        )
+        self.db.add(task)
+        self.db.flush()
+        return task
+
+    def update_agent_task(self, task_id: str, status: str, result: dict[str, object] | None = None, error: str | None = None) -> AgentTask | None:
+        task = self.db.get(AgentTask, task_id)
+        if task:
+            task.status = status
+            if result:
+                task.result = json.dumps(result)
+            if error:
+                task.error = error
+            task.updated_at = datetime.now(timezone.utc)
+            self.db.flush()
+        return task
+
+    def get_agent_task(self, task_id: str) -> AgentTask | None:
+        return self.db.get(AgentTask, task_id)
+
+    def list_agent_tasks(self, organization_id: int) -> list[AgentTask]:
+        return self.db.scalars(select(AgentTask).where(AgentTask.organization_id == organization_id).order_by(AgentTask.created_at.desc())).all()
+
+    def add_model_call(self, agent_task_id: str, provider: str, prompt_length: int, response: str, stop_reason: str, cost_usd: float = 0.0) -> ModelCall:
+        call = ModelCall(
+            agent_task_id=agent_task_id,
+            provider=provider,
+            prompt_length=prompt_length,
+            response=response,
+            stop_reason=stop_reason,
+            cost_usd=cost_usd,
+        )
+        self.db.add(call)
+        self.db.flush()
+        return call
+
+    def add_tool_call(self, agent_task_id: str, tool_name: str, args: dict[str, object], idempotency_key: str, result: dict[str, object] | None = None, error: str | None = None) -> ToolCall:
+        call = ToolCall(
+            agent_task_id=agent_task_id,
+            tool_name=tool_name,
+            args=json.dumps(args),
+            idempotency_key=idempotency_key,
+            result=json.dumps(result) if result else None,
+            error=error,
+        )
+        self.db.add(call)
+        self.db.flush()
+        return call
+

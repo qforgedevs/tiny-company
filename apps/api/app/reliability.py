@@ -21,3 +21,12 @@ class ReliabilityGuard:
 
     def check_rate_limit(self, total_calls: int, limit: int = 100) -> bool:
         return total_calls <= limit
+
+
+def redact_model_output(text: str, max_length: int = 500) -> str:
+    """Redact sensitive model output and truncate for logging."""
+    if not text:
+        return '[empty]'
+    if len(text) > max_length:
+        return text[:max_length] + '...[truncated]'
+    return text
