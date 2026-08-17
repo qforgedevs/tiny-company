@@ -197,7 +197,32 @@ This document tracks work against the approved blueprint in [docs/implementation
 - Next stage: Stage 8
 
 ## Stage 8 — Reliability and operational hardening
-- Status: not_started
+- Status: completed
+- Scope:
+  - retries with explicit boundaries and idempotency
+  - rate limiting and per-run concurrency limits
+  - redaction policy for logs and model payloads
+  - health/readiness checks
+  - error monitoring integration abstraction
+  - backup/restore documentation
+  - security review checklist
+- Acceptance criteria:
+  - failing model/tool calls do not corrupt domain state (idempotent retry logic)
+  - a restarted application can resume or safely mark interrupted tasks (idempotency keys and audit events)
+  - security checks confirm secrets and ground truth cannot leak to the browser/agent (redaction policy, server-side secrets only)
+- Relevant files:
+  - [docs/reliability-stage-8.md](reliability-stage-8.md)
+  - [apps/api/app/reliability.py](../apps/api/app/reliability.py)
+  - [apps/api/app/main.py](../apps/api/app/main.py)
+  - [apps/api/tests/test_reliability.py](../apps/api/tests/test_reliability.py)
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_reliability.py -q`
+  - Result: 15 passed; covers retry logic with exponential backoff, rate limiting, redaction policies, health checks
+  - Full test suite: `pytest apps/api/tests/ -q` Result: 37 passed with no regressions
+  - Health endpoint: `curl http://127.0.0.1:8000/health` returns `{"status":"ok","service":"tiny-company-api","version":"0.1.0"}`
+  - Readiness probe: `curl http://127.0.0.1:8000/ready` returns `{"status":"ready","remaining_quota":...}`
+  - Rate limiting, redaction policy, and retry config all tested and operational
+- Next stage: Stage 9
 - Scope:
   - retries with explicit boundaries and idempotency
   - rate limiting and per-run concurrency limits

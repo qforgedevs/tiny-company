@@ -11,12 +11,14 @@ from sqlalchemy.orm import Session
 from app.agent import CollectionsAgent, CollectionsAgentTask, get_model_gateway
 from app.db import get_db
 from app.models import Organization
+from app.reliability import ReliabilityGuard
 from app.schemas import AgentTaskCreate, AgentTaskRead, AuditEventRead, BankTransactionRead, CaseRead, ChargeRead, CustomerRead, MessageRead, OrganizationRead
 from app.services import DomainService
 from app.simulator import DeterministicSimulator, ScenarioConfig, SimulationEvent, SimulationRun
 
 app = FastAPI(title='Tiny Company API', version='0.1.0')
 simulator = DeterministicSimulator()
+reliability_guard = ReliabilityGuard()
 
 
 class ScenarioCreateRequest(BaseModel):
@@ -51,6 +53,16 @@ class SimulationEventResponse(BaseModel):
 @app.get('/health')
 def health() -> dict[str, str]:
     return {'status': 'ok', 'service': 'tiny-company-api', 'version': app.version}
+
+
+@app.get('/ready')
+def readiness(db: Session = Depends(get_db)) -> dict[str, str | int]:
+    """Readiness probe confirms database and rate limit are operational."""
+    try:
+        db.scalars(select(Organization).limit(1)).first()
+        return {'status': 'ready', 'service': 'tiny-company-api', 'remaining_quota': reliability_guard.remaining_quota()}
+    except Exception:
+        return {'status': 'not_ready', 'service': 'tiny-company-api', 'remaining_quota': 0}
 
 
 @app.get('/')
