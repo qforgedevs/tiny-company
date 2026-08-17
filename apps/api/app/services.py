@@ -7,7 +7,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AuditEvent, AgentTask, BankTransaction, CaseRecord, Charge, Customer, CustomerMessage, ModelCall, Organization, PaymentReceipt, ToolCall
+from app.models import AuditEvent, AgentTask, ApprovalRecord, BankTransaction, CaseRecord, Charge, Customer, CustomerMessage, ModelCall, Organization, PaymentMatch, PaymentReceipt, ToolCall
 
 
 class DomainService:
@@ -153,4 +153,136 @@ class DomainService:
         self.db.add(call)
         self.db.flush()
         return call
+
+    def propose_payment_match(self, organization_id: int, transaction_id: int, charge_id: int, rationale: str, confidence: float) -> PaymentMatch:
+        match = PaymentMatch(
+            organization_id=organization_id,
+            transaction_id=transaction_id,
+            charge_id=charge_id,
+            rationale=rationale,
+            confidence=confidence,
+            status='proposed',
+        )
+        self.db.add(match)
+        self.db.flush()
+        self.create_audit_event(
+            organization_id,
+            'agent',
+            'payment_match_proposed',
+            'success',
+            entity_type='payment_match',
+            entity_id=match.id,
+            details=f'Transaction {transaction_id} proposed to match charge {charge_id} with confidence {confidence}',
+        )
+        return match
+
+    def create_approval_request(
+        self,
+        organization_id: int,
+        action_type: str,
+        idempotency_key: str,
+        payload: dict[str, object],
+        rationale: str | None = None,
+        risk_summary: str | None = None,
+    ) -> ApprovalRecord:
+        approval = ApprovalRecord(
+            organization_id=organization_id,
+            idempotency_key=idempotency_key,
+            action_type=action_type,
+            payload=json.dumps(payload),
+            rationale=rationale,
+            risk_summary=risk_summary,
+            status='pending',
+        )
+        self.db.add(approval)
+        self.db.flush()
+        self.create_audit_event(
+            organization_id,
+            'agent',
+            'approval_requested',
+            'pending',
+            entity_type='approval_record',
+            entity_id=approval.id,
+            details=f'Approval requested for {action_type}',
+        )
+        return approval
+
+    def approve_request(self, approval_id: int, approved_by: str) -> ApprovalRecord | None:
+        approval = self.db.get(ApprovalRecord, approval_id)
+        if approval:
+            approval.status = 'approved'
+            approval.approved_by = approved_by
+            approval.approved_at = datetime.now(timezone.utc)
+            self.db.flush()
+            self.create_audit_event(
+                approval.organization_id,
+                'user',
+                'approval_granted',
+                'success',
+                entity_type='approval_record',
+                entity_id=approval_id,
+                details=f'Approval granted by {approved_by}',
+            )
+        return approval
+
+    def reject_request(self, approval_id: int, approved_by: str) -> ApprovalRecord | None:
+        approval = self.db.get(ApprovalRecord, approval_id)
+        if approval:
+            approval.status = 'rejected'
+            approval.approved_by = approved_by
+            approval.approved_at = datetime.now(timezone.utc)
+            self.db.flush()
+            self.create_audit_event(
+                approval.organization_id,
+                'user',
+                'approval_rejected',
+                'success',
+                entity_type='approval_record',
+                entity_id=approval_id,
+                details=f'Approval rejected by {approved_by}',
+            )
+        return approval
+
+    def get_approval_request(self, approval_id: int) -> ApprovalRecord | None:
+        return self.db.get(ApprovalRecord, approval_id)
+
+    def apply_payment_match(self, match_id: int, approved_by: str) -> PaymentMatch | None:
+        match = self.db.get(PaymentMatch, match_id)
+        if not match or match.status != 'proposed':
+            return None
+
+        charge = self.db.get(Charge, match.charge_id)
+        transaction = self.db.get(BankTransaction, match.transaction_id)
+
+        if charge and transaction:
+            charge.status = 'paid'
+            transaction.status = 'matched'
+            transaction.customer_id = charge.customer_id
+            match.status = 'applied'
+            self.db.flush()
+
+            self.create_audit_event(
+                match.organization_id,
+                'user',
+                'payment_match_applied',
+                'success',
+                entity_type='payment_match',
+                entity_id=match_id,
+                details=f'Match applied between transaction {match.transaction_id} and charge {match.charge_id} by {approved_by}',
+            )
+
+        return match
+
+    def send_customer_message(self, organization_id: int, customer_id: int, message_type: str, body: str, approved_by: str) -> CustomerMessage:
+        message = self.create_message(organization_id, customer_id, message_type, body)
+        self.create_audit_event(
+            organization_id,
+            'user',
+            'customer_message_sent',
+            'success',
+            entity_type='customer_message',
+            entity_id=message.id,
+            details=f'Message sent to customer {customer_id} by {approved_by}',
+        )
+        return message
 

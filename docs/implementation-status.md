@@ -150,7 +150,7 @@ This document tracks work against the approved blueprint in [docs/implementation
 - Next stage: Stage 6
 
 ## Stage 6 — Supervised collections workflow
-- Status: not_started
+- Status: completed
 - Scope:
   - payment-match review workflow
   - reminder drafting workflow
@@ -163,8 +163,15 @@ This document tracks work against the approved blueprint in [docs/implementation
   - a reminder cannot be sent without approval
   - audit timeline explains outcome without hidden reasoning
 - Relevant files:
-  - [apps/api/app](../apps/api/app)
-- Evidence: pending
+  - [apps/api/app/models.py](../apps/api/app/models.py) (PaymentMatch, ApprovalRecord)
+  - [apps/api/app/schemas.py](../apps/api/app/schemas.py) (PaymentMatchRead, ApprovalRecordRead)
+  - [apps/api/app/services.py](../apps/api/app/services.py) (supervised workflow methods)
+  - [apps/api/tests/test_workflow.py](../apps/api/tests/test_workflow.py)
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_workflow.py -q`
+  - Result: 3 passed; payment matches are proposed and require approval; approved matches update charges idempotently; audit events track full lifecycle
+  - Full test suite: `pytest apps/api/tests/ -q` Result: 16 passed
+  - Approved actions execute exactly once; duplicate submissions are blocked
 - Next stage: Stage 7
 
 ## Stage 7 — Evaluation suite

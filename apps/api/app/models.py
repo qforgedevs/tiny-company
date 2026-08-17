@@ -158,3 +158,38 @@ class ToolCall(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     agent_task: Mapped[AgentTask] = relationship()
+
+
+class PaymentMatch(Base):
+    __tablename__ = 'payment_matches'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey('organizations.id'), nullable=False)
+    transaction_id: Mapped[int] = mapped_column(ForeignKey('bank_transactions.id'), nullable=False)
+    charge_id: Mapped[int] = mapped_column(ForeignKey('charges.id'), nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=0.8, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default='proposed', nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    organization: Mapped[Organization] = relationship()
+    transaction: Mapped[BankTransaction] = relationship()
+    charge: Mapped[Charge] = relationship()
+
+
+class ApprovalRecord(Base):
+    __tablename__ = 'approval_records'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey('organizations.id'), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    action_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default='pending', nullable=False)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    risk_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    organization: Mapped[Organization] = relationship()

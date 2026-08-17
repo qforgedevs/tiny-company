@@ -117,3 +117,32 @@ class AgentTaskRead(BaseModel):
 class AgentTaskCreate(BaseModel):
     task_type: str
     context: dict[str, object]
+
+
+class PaymentMatchRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    organization_id: int
+    transaction_id: int
+    charge_id: int
+    rationale: str
+    confidence: float
+    status: str
+    created_at: datetime
+
+
+class ApprovalRecordRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    organization_id: int
+    idempotency_key: str
+    action_type: str
+    status: str
+    payload: str
+    rationale: str | None = None
+    risk_summary: str | None = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    created_at: datetime
