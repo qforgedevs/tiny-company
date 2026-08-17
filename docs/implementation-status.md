@@ -3,7 +3,7 @@
 This document tracks work against the approved blueprint in [docs/implementation-blueprint.md](docs/implementation-blueprint.md). Each stage below records the scope, concrete evidence, and current status.
 
 ## Stage 0 — Repository foundation
-- Status: in_progress
+- Status: completed
 - Scope:
   - monorepo bootstrap
   - root AGENTS.md with invariants and coding rules
@@ -23,11 +23,12 @@ This document tracks work against the approved blueprint in [docs/implementation
   - [apps/api/app/main.py](../apps/api/app/main.py)
   - [apps/web/package.json](../apps/web/package.json)
 - Evidence:
-  - not yet recorded; this stage is in progress
+  - `make test && make typecheck && make web-build && make api-health`
+  - Result: 4 API/web tests passed; Next.js production build succeeded; API health endpoint returned `{"status":"ok","service":"tiny-company-api","version":"0.1.0"}`
 - Next stage: Stage 1
 
 ## Stage 1 — Domain kernel and persistence
-- Status: not_started
+- Status: completed
 - Scope:
   - database schema and migrations
   - domain glossary and invariants
@@ -40,14 +41,21 @@ This document tracks work against the approved blueprint in [docs/implementation
   - domain-service tests cover core invariants
   - API client is generated and used by the web app
 - Relevant files:
-  - [apps/api](../apps/api)
-  - [packages/api-client](../packages/api-client)
+  - [apps/api/app/models.py](../apps/api/app/models.py)
+  - [apps/api/app/services.py](../apps/api/app/services.py)
+  - [apps/api/app/main.py](../apps/api/app/main.py)
+  - [apps/api/app/schemas.py](../apps/api/app/schemas.py)
+  - [apps/api/alembic/env.py](../apps/api/alembic/env.py)
   - [docs/domain-glossary.md](domain-glossary.md)
-- Evidence: pending
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_health.py apps/api/tests/test_domain_kernel.py -q`
+  - Result: 4 passed in 2.19s
+  - `cd apps/web && npm run typecheck && npm run build`
+  - Result: Next.js build passed
 - Next stage: Stage 2
 
 ## Stage 2 — Deterministic simulator
-- Status: not_started
+- Status: completed
 - Scope:
   - `ScenarioConfig`, `SimulationRun`, event schedule, seed handling, and simulated clock
   - initial payment/message event generators
@@ -59,8 +67,13 @@ This document tracks work against the approved blueprint in [docs/implementation
   - ground truth remains inaccessible through normal API and agent context
   - tests prove determinism and event ordering
 - Relevant files:
-  - [apps/api/app](../apps/api/app)
-- Evidence: pending
+  - [apps/api/app/simulator.py](../apps/api/app/simulator.py)
+  - [apps/api/app/main.py](../apps/api/app/main.py)
+  - [apps/api/tests/test_simulator.py](../apps/api/tests/test_simulator.py)
+- Evidence:
+  - `pytest apps/api/tests/test_simulator.py -q`
+  - Result: 3 passed in 0.03s
+  - API contract validation via `TestClient` confirmed `/simulator/run`, `/simulator/run/{run_id}/advance`, `/simulator/run/{run_id}/reset`, and `/simulator/run/{run_id}/replay` all respond deterministically
 - Next stage: Stage 3
 
 ## Stage 3 — Operations UI

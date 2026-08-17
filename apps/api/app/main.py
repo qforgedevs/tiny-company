@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -8,8 +9,39 @@ from app.db import get_db
 from app.models import Organization
 from app.schemas import AuditEventRead, BankTransactionRead, CaseRead, ChargeRead, CustomerRead, MessageRead, OrganizationRead
 from app.services import DomainService
+from app.simulator import DeterministicSimulator, ScenarioConfig, SimulationEvent, SimulationRun
 
 app = FastAPI(title='Tiny Company API', version='0.1.0')
+simulator = DeterministicSimulator()
+
+
+class ScenarioCreateRequest(BaseModel):
+    seed: int = 48172
+    start_time: str = '2026-01-01T08:00:00Z'
+    scenario_version: str = 'v1'
+    organization_name: str = 'Tiny Academy'
+
+
+class ScenarioRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    config: dict[str, str | int]
+    clock: str
+    event_count: int
+
+
+class SimulationAdvanceRequest(BaseModel):
+    duration_hours: int = 8
+
+
+class SimulationEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    event_id: str
+    kind: str
+    occurred_at: str
+    details: dict[str, object]
 
 
 @app.get('/health')
@@ -76,3 +108,69 @@ def list_audit_events(organization_id: int, db: Session = Depends(get_db)) -> li
     service = DomainService(db)
     records = service.list_audit_events(organization_id)
     return [AuditEventRead.model_validate(item) for item in records]
+
+
+@app.post('/simulator/run', response_model=ScenarioRunResponse)
+def create_simulation_run(payload: ScenarioCreateRequest) -> ScenarioRunResponse:
+    config = ScenarioConfig(
+        seed=payload.seed,
+        start_time=payload.start_time,
+        scenario_version=payload.scenario_version,
+        organization_name=payload.organization_name,
+    )
+    run = simulator.create_run(config)
+    return ScenarioRunResponse(
+        id=run.id,
+        config={
+            'seed': run.config.seed,
+            'start_time': run.config.start_time,
+            'scenario_version': run.config.scenario_version,
+            'organization_name': run.config.organization_name,
+        },
+        clock=run.clock,
+        event_count=len(run.events),
+    )
+
+
+@app.get('/simulator/run/{run_id}', response_model=ScenarioRunResponse)
+def get_simulation_run(run_id: str) -> ScenarioRunResponse:
+    run = simulator._runs[run_id]
+    return ScenarioRunResponse(
+        id=run.id,
+        config={
+            'seed': run.config.seed,
+            'start_time': run.config.start_time,
+            'scenario_version': run.config.scenario_version,
+            'organization_name': run.config.organization_name,
+        },
+        clock=run.clock,
+        event_count=len(run.events),
+    )
+
+
+@app.post('/simulator/run/{run_id}/advance', response_model=list[SimulationEventResponse])
+def advance_simulation_run(run_id: str, payload: SimulationAdvanceRequest) -> list[SimulationEventResponse]:
+    events = simulator.advance(run_id, duration_hours=payload.duration_hours)
+    return [SimulationEventResponse.model_validate(event) for event in events]
+
+
+@app.post('/simulator/run/{run_id}/reset', response_model=ScenarioRunResponse)
+def reset_simulation_run(run_id: str) -> ScenarioRunResponse:
+    run = simulator.reset(run_id)
+    return ScenarioRunResponse(
+        id=run.id,
+        config={
+            'seed': run.config.seed,
+            'start_time': run.config.start_time,
+            'scenario_version': run.config.scenario_version,
+            'organization_name': run.config.organization_name,
+        },
+        clock=run.clock,
+        event_count=len(run.events),
+    )
+
+
+@app.get('/simulator/run/{run_id}/replay', response_model=list[SimulationEventResponse])
+def replay_simulation_run(run_id: str) -> list[SimulationEventResponse]:
+    events = simulator.replay(run_id)
+    return [SimulationEventResponse.model_validate(event) for event in events]
