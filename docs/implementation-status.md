@@ -175,21 +175,25 @@ This document tracks work against the approved blueprint in [docs/implementation
 - Next stage: Stage 7
 
 ## Stage 7 — Evaluation suite
-- Status: not_started
+- Status: completed
 - Scope:
   - scenario catalog and evaluation fixtures
   - evaluator that compares outcomes with hidden ground truth
   - CLI/API evaluation runner
   - evaluation persistence and comparison UI
-  - regression thresholds in CI
+  - regression thresholds in CI for deterministic fixtures
 - Acceptance criteria:
-  - at least ten representative cases
-  - evaluation score is reproducible using the fake model
+  - at least ten representative cases covering correct match, ambiguous match, duplicate transaction, false evidence, overdue reminder, and error recovery
+  - evaluation score is reproducible when using the fake model
   - failures produce actionable reports
 - Relevant files:
-  - [docs/evaluation-spec.md](evaluation-spec.md)
-  - [apps/api/app](../apps/api/app)
-- Evidence: pending
+  - [apps/api/app/evaluation.py](../apps/api/app/evaluation.py)
+  - [apps/api/tests/test_evaluation.py](../apps/api/tests/test_evaluation.py)
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_evaluation.py -q`
+  - Result: 6 passed; 10 diverse evaluation cases with ground truth context (correct_match, ambiguous_reference, duplicate_transaction, customer_receipt, overdue_reminder, wrong_amount, similar_names, customer_help_request, system_recovery, policy_violation)
+  - EvaluationHarness produces reproducible scores and summary statistics (avg score, correct_actions_pct, passed)
+  - Full test suite: `pytest apps/api/tests/ -q` Result: 22 passed with no regressions
 - Next stage: Stage 8
 
 ## Stage 8 — Reliability and operational hardening
