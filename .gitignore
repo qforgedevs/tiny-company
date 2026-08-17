@@ -1,0 +1,19 @@
+# Node
+node_modules/
+.next/
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Build
+coverage/
+.pytest_cache/
+.vitest/
