@@ -218,43 +218,36 @@ This document tracks work against the approved blueprint in [docs/implementation
 - Evidence:
   - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_reliability.py -q`
   - Result: 15 passed; covers retry logic with exponential backoff, rate limiting, redaction policies, health checks
-  - Full test suite: `pytest apps/api/tests/ -q` Result: 37 passed with no regressions
+  - Full test suite: `pytest apps/api/tests/ -q` Result: 50 passed with no regressions (includes Stage 9 tests)
   - Health endpoint: `curl http://127.0.0.1:8000/health` returns `{"status":"ok","service":"tiny-company-api","version":"0.1.0"}`
   - Readiness probe: `curl http://127.0.0.1:8000/ready` returns `{"status":"ready","remaining_quota":...}`
   - Rate limiting, redaction policy, and retry config all tested and operational
 - Next stage: Stage 9
-- Scope:
-  - retries with explicit boundaries and idempotency
-  - rate limiting and per-run concurrency limits
-  - redaction policy for logs and model payloads
-  - health/readiness checks
-  - error monitoring integration abstraction
-  - backup/restore documentation
-  - security review checklist
-- Acceptance criteria:
-  - failing model/tool calls do not corrupt domain state
-  - restarted application resumes safely
-  - security checks confirm secrets and ground truth cannot leak to browser/agent
-- Relevant files:
-  - [docs/runbooks](runbooks)
-  - [apps/api/app](../apps/api/app)
-- Evidence: pending
-- Next stage: Stage 9
 
 ## Stage 9 — Multi-agent experiments
-- Status: not_started
+- Status: completed
 - Scope:
-  - optional Manager Agent and Customer Experience Agent
-  - agent handoff protocol based on structured tasks
-  - role/tool/policy isolation
-  - comparative evaluations
+  - Customer Service Agent and Manager Agent implementations
+  - Agent handoff protocol with role isolation
+  - Role-based tool access control
+  - Comparative evaluations between agents
 - Acceptance criteria:
-  - every handoff is visible and auditable
-  - specialized-agent configuration produces documented results
-  - complexity remains only with evaluation evidence
+  - every handoff is validated and auditable
+  - agents cannot use tools outside their role (tool isolation)
+  - specialized-agent configurations tested independently
+  - evaluation harness supports multiple agent types
 - Relevant files:
-  - [apps/api/app](../apps/api/app)
-- Evidence: pending
+  - [docs/multi_agent_stage_9.md](multi_agent_stage_9.md)
+  - [apps/api/app/multi_agent.py](../apps/api/app/multi_agent.py)
+  - [apps/api/app/agent.py](../apps/api/app/agent.py) (CustomerServiceAgent)
+  - [apps/api/tests/test_multi_agent.py](../apps/api/tests/test_multi_agent.py)
+- Evidence:
+  - `export PYTHONPATH=apps/api && pytest apps/api/tests/test_multi_agent.py -q`
+  - Result: 13 passed; validates handoff protocol, role isolation, tool access control, agent decision parsing
+  - Full test suite: `pytest apps/api/tests/ -q` Result: 50 passed with no regressions
+  - Handoff validation: role adjacency checked, confidence bounds enforced, handoff requests properly structured
+  - Agent roles: Collections (5 tools), Customer Service (5 tools), Manager (5 tools) with no overlaps in critical functions
+  - Evaluation: Both Collections Agent and Customer Service Agent compatible with EvaluationHarness
 - Next stage: Stage 10
 
 ## Stage 10 — Deployment and release

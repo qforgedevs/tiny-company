@@ -294,3 +294,121 @@ class CollectionsAgent:
             return {'action': 'escalate_case', 'escalation_reason': 'Model flagged ambiguity', 'confidence': 0.5}
         else:
             return {'action': 'no_action', 'rationale': 'No clear action identified'}
+
+
+@dataclass
+class CustomerServiceAgentTask:
+    """Task for CustomerServiceAgent to handle customer inquiries and service requests."""
+
+    id: str
+    organization_id: int
+    run_id: str
+    task_type: str  # e.g., 'answer_inquiry', 'resolve_issue'
+    context: dict[str, Any]
+    status: str = 'pending'
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    model_calls: list[dict[str, Any]] = None  # type: ignore
+    tool_calls: list[ToolCall] = None  # type: ignore
+
+    def __post_init__(self) -> None:
+        if self.model_calls is None:
+            object.__setattr__(self, 'model_calls', [])
+        if self.tool_calls is None:
+            object.__setattr__(self, 'tool_calls', [])
+
+
+class CustomerServiceAgent:
+    """Customer Service Agent: handles customer inquiries, service issues, and support requests."""
+
+    def __init__(self, gateway: ModelGateway | None = None, tool_registry: ToolRegistry | None = None) -> None:
+        self.gateway = gateway or get_model_gateway()
+        self.tool_registry = tool_registry or ToolRegistry()
+
+    async def run_task(self, task: CustomerServiceAgentTask) -> CustomerServiceAgentTask:
+        """Run a Customer Service Agent task: analyze inquiry, respond or escalate."""
+        task.status = 'running'
+
+        prompt = self._build_prompt(task)
+        request = ModelRequest(prompt=prompt, temperature=0.2, max_tokens=512)
+
+        try:
+            response = self.gateway.generate(request)
+            task.model_calls.append(
+                {
+                    'provider': response.provider,
+                    'prompt_length': len(prompt),
+                    'response': redact_model_output(response.text),
+                    'stop_reason': response.stop_reason,
+                    'cost_usd': response.cost_usd,
+                }
+            )
+
+            decision = self._parse_decision(response.text)
+            task.result = decision
+
+            if decision.get('action') == 'send_message':
+                tool_call = ToolCall(
+                    name='send_customer_message',
+                    args={
+                        'customer_id': task.context.get('customer_id', 0),
+                        'message': decision.get('response', 'Thank you for contacting us.'),
+                    },
+                    idempotency_key=f'task:{task.id}:message',
+                )
+                task.tool_calls.append(tool_call)
+                tool_result = await self.tool_registry.execute(tool_call)
+                task.result['tool_result'] = {'message_id': tool_result.result.get('message_id')}
+
+            elif decision.get('action') == 'create_service_case':
+                tool_call = ToolCall(
+                    name='create_service_case',
+                    args={
+                        'customer_id': task.context.get('customer_id', 0),
+                        'issue_type': decision.get('issue_type', 'general_inquiry'),
+                        'summary': decision.get('summary', 'Customer service inquiry'),
+                    },
+                    idempotency_key=f'task:{task.id}:case',
+                )
+                task.tool_calls.append(tool_call)
+                tool_result = await self.tool_registry.execute(tool_call)
+                task.result['tool_result'] = {'case_id': tool_result.result.get('case_id')}
+
+            task.status = 'completed'
+
+        except Exception as err:
+            task.status = 'error'
+            task.error = str(err)
+
+        return task
+
+    def _build_prompt(self, task: CustomerServiceAgentTask) -> str:
+        """Build a prompt for the Customer Service Agent."""
+        prompt = 'You are a Customer Service Agent for a recurring-payments academy.\n\n'
+        prompt += f"Inquiry: {task.task_type}\n\n"
+        prompt += f"Context:\n{json.dumps(task.context, indent=2)}\n\n"
+        prompt += "Available actions:\n"
+        prompt += "- send_message: Respond directly to the customer\n"
+        prompt += "- create_service_case: Escalate to a support case\n"
+        prompt += "- no_action: No response needed\n"
+        prompt += "\nRespond with JSON: {\"action\": \"...\", \"response\": \"...\", \"confidence\": 0.0-1.0}\n"
+        return prompt
+
+    def _parse_decision(self, model_text: str) -> dict[str, Any]:
+        """Parse model output to extract decision."""
+        try:
+            start = model_text.find('{')
+            end = model_text.rfind('}') + 1
+            if start >= 0 and end > start:
+                json_str = model_text[start:end]
+                return json.loads(json_str)
+        except Exception:
+            pass
+
+        text_lower = model_text.lower()
+        if 'send' in text_lower or 'message' in text_lower:
+            return {'action': 'send_message', 'response': 'Thank you for contacting us.', 'confidence': 0.6}
+        elif 'create' in text_lower or 'escalate' in text_lower or 'case' in text_lower:
+            return {'action': 'create_service_case', 'issue_type': 'general_inquiry', 'confidence': 0.5}
+        else:
+            return {'action': 'no_action', 'rationale': 'No action required'}
